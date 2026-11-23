@@ -5212,10 +5212,13 @@ async def update_loop():
                     "rsi": rsi_now,
                     "heiken": consec,
                     "heiken_5m": consec_5m,
+                    "fair": fair_data,
                     "drift_5m": drift_5m,
                     "sigma_5m": sigma_5m
                 },
                 "analysis": {
+                    "probability": prob_view,
+                    "edge": edge,
                     "fairProbUp": fair_prob_up,
                     "fairProbDown": 1.0 - fair_prob_up if fair_prob_up is not None else None,
                     "impliedProbUp": implied_prob_up,

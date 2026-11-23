@@ -576,6 +576,9 @@
                     this.suppressSyncUntil = Date.now() + 3000; this.botBusy = false;
                 },
                 getViewData() {
+                    if (this.data.tf_data && this.data.tf_data['5']) {
+                        return this.data.tf_data['5'];
+                    }
                     return {
                         timing: this.data.timing || {},
                         prices: this.data.prices || {},
