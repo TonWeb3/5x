@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dashboard [GTD] - Polymarket Assistant</title>
+    <title>Dashboard [5Min] - Polymarket Assistant</title>
         <script>
         // Suppress Tailwind Play CDN warning in developer console
         const _origWarn = console.warn;
@@ -29,8 +29,7 @@
         <header class="flex flex-col sm:flex-row justify-between items-center mb-6 sm:mb-8 gap-4">
             <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <h1 class="text-2xl sm:text-3xl font-bold text-blue-400" x-text="(data.trading_state?.symbol || 'BTC') + ' 5m Assistant'"></h1>
-                <span class="bg-indigo-900/80 text-indigo-300 border border-indigo-500/50 px-2 sm:px-2.5 py-0.5 rounded font-mono text-xs font-black tracking-wider" title="Strictly Good 'Til Date (GTD) execution mode">GTD</span>
-                <span class="bg-blue-900/80 text-blue-200 border border-blue-500/50 px-2 sm:px-2.5 py-0.5 rounded font-mono text-xs font-black tracking-wider">5M</span>
+                <span class="bg-indigo-900/80 text-indigo-300 border border-indigo-500/50 px-2 sm:px-2.5 py-0.5 rounded font-mono text-xs font-black tracking-wider">5Min</span>
                 <span :class="data.trading_state?.mode === 'paper' ? 'bg-amber-900/80 text-amber-300 border-amber-500/50' : 'bg-emerald-900/80 text-emerald-300 border-emerald-500/50'"
                       class="border px-2 sm:px-2.5 py-0.5 rounded font-mono text-xs font-black tracking-wider uppercase"
                       x-text="data.trading_state?.mode === 'paper' ? 'PAPER' : 'HYBRID'"></span>
@@ -169,7 +168,7 @@
                               x-text="data.indicators?.heiken_5m?.color ? (data.indicators.heiken_5m.color + ' x' + data.indicators.heiken_5m.count) : '--'"></span>
                     </div>
                     <div class="flex justify-between text-sm sm:text-base">
-                        <span class="text-gray-400" x-text="'Fair Probability (' + (viewTimeframe || data.trading_state?.candle_window_minutes || 15) + 'm Close)'"></span>
+                        <span class="text-gray-400">Fair Probability (5m Close)</span>
                         <div class="flex flex-col items-end">
                             <span :class="vIndicators.fair?.bias === 'BULLISH' ? 'text-green-400' : (vIndicators.fair?.bias === 'BEARISH' ? 'text-red-400' : 'text-gray-400')"
                                   x-text="vIndicators.fair?.prob_up != null ? ((vIndicators.fair.prob_up * 100).toFixed(1) + '% UP') : '--'"></span>
