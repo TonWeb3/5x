@@ -1,6 +1,6 @@
-# Polymarket BTC 15m Assistant [GTD] (Python FastAPI)
+# Polymarket BTC 5m Assistant [GTD] (Python FastAPI)
 
-A real-time trading assistant for Polymarket **"Bitcoin Up or Down" 15-minute** markets, ported to Python and FastAPI.
+A real-time trading assistant for Polymarket **"Bitcoin Up or Down" 5-minute** markets, ported to Python and FastAPI.
 
 > **📖 Full reference: [`documentation.md`](documentation.md)** — the strategy, the
 > strike mechanism, settlement, config, API and known limits, in detail. This README is

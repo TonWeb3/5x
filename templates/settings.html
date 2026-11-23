@@ -84,11 +84,8 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                     <div>
                         <label class="block text-gray-400 text-xs sm:text-sm mb-2 uppercase font-bold tracking-wider">Market Timeframe</label>
-                        <select x-model.number="form.trading.candle_window_minutes" @change="onTimeframeChange()" class="w-full bg-gray-700 border-none rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 transition">
-                            <option :value="15">15 Minutes (15m Strategy)</option>
-                            <option :value="5">5 Minutes (5m Strategy)</option>
-                        </select>
-                        <p class="text-[10px] text-gray-400 mt-2 italic">Determines which market timeframe the bot actively trades. The 15M / 5M buttons on the dashboard are for view-only inspection and do not switch live trading.</p>
+                        <div class="w-full bg-gray-700/70 rounded-lg p-3 text-white font-semibold">5 Minutes (5m Strategy)</div>
+                        <p class="text-[10px] text-gray-400 mt-2 italic">Dedicated 5-minute standalone market timeframe.</p>
                     </div>
                     <div>
                         <label class="block text-gray-400 text-xs sm:text-sm mb-2 uppercase font-bold tracking-wider">Binance Symbol</label>
@@ -165,7 +162,7 @@
                 </div>
             </div>
 
-            <!-- Underdog Reversal Strategy (from 5M / 15M Workspace) -->
+            <!-- Underdog Reversal Strategy (5M) -->
             <div class="bg-gray-800 p-5 sm:p-6 rounded-lg shadow-lg border border-purple-500/30">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-gray-700 gap-2">
                     <div class="flex items-center gap-3">
@@ -176,7 +173,7 @@
                         <div>
                             <h2 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
                                 Underdog Reversal Strategy
-                                <span class="text-xs px-2 py-0.5 rounded font-mono font-bold bg-purple-950 text-purple-300 border border-purple-700">5M &amp; 15M Engine</span>
+                                <span class="text-xs px-2 py-0.5 rounded font-mono font-bold bg-purple-950 text-purple-300 border border-purple-700">5M Engine</span>
                             </h2>
                             <p class="text-xs text-gray-400">Switches execution from Standard EV to 5-Gate Underdog Reversal (Volatility Cone + Spot Momentum Hook + TP/SL Convexity Scalper).</p>
                         </div>
@@ -645,7 +642,7 @@
                         <label class="block text-gray-400 text-xs sm:text-sm mb-2 uppercase font-bold tracking-wider">Resume After</label>
                         <select x-model="form.capital_extractor.resume_after" class="w-full bg-gray-700 border-none rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 transition">
                             <option value="flat">Once position is flat (standard 30s)</option>
-                            <option value="next_window">Wait for next 15m market window</option>
+                            <option value="next_window">Wait for next 5m market window</option>
                             <option value="submitted">Transaction submitted (faster)</option>
                             <option value="confirmed">Confirmed on-chain (safer)</option>
                         </select>
@@ -681,7 +678,7 @@
                     </button>
                 </div>
 
-                <p class="text-[10px] text-gray-500 mt-3 italic"><strong>Live mode only.</strong> When equity &ge; trigger: pause new entries &rarr; sell any open position at the bid to go flat &rarr; withdraw the amount &rarr; resume at the next 15m market.</p>
+                <p class="text-[10px] text-gray-500 mt-3 italic"><strong>Live mode only.</strong> When equity &ge; trigger: pause new entries &rarr; sell any open position at the bid to go flat &rarr; withdraw the amount &rarr; resume at the next 5m market.</p>
             </div>
 
             <!-- Telegram alerts -->

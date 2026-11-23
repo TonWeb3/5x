@@ -4730,21 +4730,18 @@ async def update_loop():
             need_rest_spot = spot_cand is None
             need_rest_chainlink = not (poly_ws.get("price") or cl_ws.get("price") or state.get("last_chainlink_price"))
 
-            active_tf = settings.CANDLE_WINDOW_MINUTES
-            other_tf = 5 if active_tf == 15 else 15
+            active_tf = 5
 
             results = await asyncio.gather(
                 data.fetch_last_price(settings.SYMBOL) if need_rest_spot else asyncio.sleep(0, result=None),
                 chainlink.chainlink_fetcher.fetch_chainlink_btc_usd() if need_rest_chainlink else asyncio.sleep(0, result={}),
                 fetch_polymarket_snapshot(),
-                fetch_other_tf_snapshot(other_tf),
                 return_exceptions=True
             )
 
             last_price = results[0] if not isinstance(results[0], Exception) else None
             chainlink_data = results[1] if not isinstance(results[1], Exception) else {}
             poly_snapshot = results[2] if not isinstance(results[2], Exception) else {"ok": False}
-            other_snapshot = results[3] if not isinstance(results[3], Exception) else {"ok": False}
 
             klines_1m = binance_kline_1m.get_candles()
             klines_5m = binance_kline_5m.get_candles()
@@ -5129,155 +5126,6 @@ async def update_loop():
             except Exception:
                 pass
 
-            # View-only snapshot and analysis for non-active timeframe
-            other_timing = get_candle_window_timing(other_tf)
-            other_market = other_snapshot.get("market") if other_snapshot.get("ok") else None
-            other_w_ms = other_tf * 60_000
-            other_start_ms = None
-            if other_market:
-                _oesr = other_market.get("eventStartTime") or other_market.get("gameStartTime")
-                if _oesr:
-                    try:
-                        other_start_ms = int(datetime.fromisoformat(str(_oesr).replace('Z', '+00:00')).timestamp() * 1000)
-                    except Exception:
-                        other_start_ms = None
-                if other_start_ms is None and other_market.get("endDate"):
-                    try:
-                        other_start_ms = int(datetime.fromisoformat(other_market["endDate"].replace('Z', '+00:00')).timestamp() * 1000) - other_w_ms
-                    except Exception:
-                        other_start_ms = None
-            if other_start_ms is None:
-                other_start_ms = int(other_timing["startMs"])
-
-            other_m_up = other_snapshot.get("prices", {}).get("up") if other_snapshot.get("ok") else None
-            other_m_down = other_snapshot.get("prices", {}).get("down") if other_snapshot.get("ok") else None
-            other_implied_up = None
-            if other_m_up is not None and other_m_down is not None and (other_m_up + other_m_down) > 0:
-                other_implied_up = other_m_up / (other_m_up + other_m_down)
-
-            other_model_open = None
-            for c in reversed(klines_5m):
-                if c["openTime"] == other_start_ms or (c["openTime"] <= other_start_ms < c["openTime"] + 300_000):
-                    other_model_open = c["open"]
-                    break
-            if other_model_open is None and klines_1m:
-                for c in reversed(klines_1m):
-                    if c["openTime"] == other_start_ms or (c["openTime"] <= other_start_ms < c["openTime"] + 60_000):
-                        other_model_open = c["open"]
-                        break
-
-            other_strike = _other_tf_strikes.get(other_start_ms)
-            if other_strike is None and current_price and price_is_fresh:
-                if 0 <= (time.time() * 1000 - other_start_ms) < MARK_CAPTURE_WINDOW_MS:
-                    _other_tf_strikes[other_start_ms] = current_price
-                    other_strike = current_price
-            if _ps_use("prices"):
-                other_ptb = polybolt_feed.twap_at(other_start_ms / 1000.0, _ps_tol())
-                if other_ptb is not None:
-                    other_strike = other_ptb
-                    _other_tf_strikes[other_start_ms] = other_ptb
-
-            other_left_min = max(0.0, other_timing["remainingMinutes"])
-            other_tau_s = max(0.5, other_timing["remainingMs"] / 1000.0)
-            if other_strike is None:
-                other_fair_up = 0.50
-                other_phase = "UNDERDOG" if is_ud_on else "EV"
-                other_decision = {"action": "NO_TRADE", "side": None, "phase": other_phase, "strength": other_phase, "reason": "waiting_new_window_strike"}
-            else:
-                other_target = other_strike if use_basis else (other_model_open or spot_price or other_strike)
-                other_fair_up = indicators.fair_prob_up(model_spot or 0, other_target, other_tau_s, sigma_s)
-                if is_ud_on:
-                    other_decision = underdog.decide({
-                        "mcProbUp": other_fair_up,
-                        "priceUp": other_m_up,
-                        "priceDown": other_m_down,
-                        "spotPrice": spot_price,
-                        "strikePrice": other_strike,
-                        "sigma1m": sigma_1m,
-                        "timeLeftMin": other_left_min,
-                        "momentum": spot_momentum,
-                        "maxUnderdogPrice": ud_cfg.get("max_price", 0.07),
-                        "minUnderdogProb": ud_cfg.get("min_prob", 0.10),
-                        "minUnderdogEv": ud_cfg.get("min_ev", 0.02),
-                        "maxSigmaDistance": ud_cfg.get("max_sigma_distance", 2.0),
-                        "momentumFilter": ud_cfg.get("momentum_filter", True),
-                    })
-                else:
-                    other_decision = engines.decide_ev({
-                        "mcProbUp": other_fair_up,
-                        "priceUp": other_m_up,
-                        "priceDown": other_m_down,
-                        "minProb": settings.MIN_PROB_EV,
-                        "evThreshold": settings.EV_THRESHOLD,
-                        "maxOddsEnabled": getattr(settings, "MAX_ODDS_ENABLED", False),
-                        "maxOddsCents": getattr(settings, "MAX_ODDS_CENTS", 25.0),
-                        "rsi": rsi_now,
-                        "haExhaustedGreen": ha_exhausted_green,
-                        "haExhaustedRed": ha_exhausted_red,
-                        "impulse": spot_impulse,
-                        "spotPrice": spot_price,
-                        "sigmaPerSqrtS": sigma_s,
-                    })
-
-            other_view_data = {
-                "timeframe": other_tf,
-                "timing": other_timing,
-                "market": other_market,
-                "prices": {
-                    "current": current_price,
-                    "source": price_source,
-                    "spot": spot_price,
-                    "spot_source": "Binance WS" if (binance_ws and binance_ws.get("price")) else ("Binance REST" if last_price else None),
-                    "poly_up": other_m_up,          # the names the dashboard reads
-                    "poly_down": other_m_down,
-                    "up": other_m_up,
-                    "down": other_m_down,
-                    "up_buy": other_snapshot.get("prices", {}).get("up_buy"),
-                    "down_buy": other_snapshot.get("prices", {}).get("down_buy"),
-                    "spread_up": other_snapshot.get("prices", {}).get("spread_up"),
-                    "spread_down": other_snapshot.get("prices", {}).get("spread_down"),
-                    "window_open": other_strike,
-                    "window_open_source": "view_only",
-                    "model_open": other_model_open,
-                    "window_start_ms": other_start_ms,
-                    "price_is_fresh": price_is_fresh,
-                    "book_source": other_snapshot.get("book_source") if other_snapshot.get("ok") else None,
-                    "price_stream": polybolt_feed.view() if polybolt.on(settings.PRICE_STREAM) else None
-                },
-                "orderbook": other_snapshot.get("orderbook", {}),
-                "indicators": {
-                    "rsi": rsi_now,
-                    "heiken": consec,
-                    "heiken_5m": consec_5m,
-                    "fair": {
-                        "prob_up": other_fair_up,
-                        "prob_down": 1.0 - other_fair_up,
-                        "bias": "BULLISH" if other_fair_up > 0.6 else "BEARISH" if other_fair_up < 0.4 else "NEUTRAL",
-                        "tau_s": round(other_tau_s, 1),
-                        "sigma_5m": sigma_5m,
-                    }
-                },
-                "analysis": {
-                    "probability": {"adjustedUp": other_fair_up, "adjustedDown": 1.0 - other_fair_up},
-                    "edge": {
-                        "marketUp": other_implied_up,
-                        "marketDown": (1 - other_implied_up) if other_implied_up is not None else None,
-                        "edgeUp": (other_fair_up - other_implied_up) if other_implied_up is not None else None,
-                        "edgeDown": ((1 - other_fair_up) - (1 - other_implied_up)) if other_implied_up is not None else None,
-                    },
-                    "decision": other_decision,
-                    "longshot": None,
-                    "underdog": {
-                        "active": is_ud_on,
-                        "z_dist": other_decision.get("z_dist") if is_ud_on else None,
-                        "momentum": spot_momentum,
-                        "sigma_1m": sigma_1m,
-                        "locked": False
-                    },
-                },
-                "is_trading": False,
-            }
-
             active_view_data = {
                 "timeframe": active_tf,
                 "timing": timing,
@@ -5308,7 +5156,6 @@ async def update_loop():
 
             tf_data = {
                 str(active_tf): active_view_data,
-                str(other_tf): other_view_data
             }
 
             state["latest_data"] = {
@@ -5712,85 +5559,13 @@ async def stop_trading():
 @app.get("/api/available-series")
 async def get_available_series(timeframe: Optional[str] = None):
     try:
-        return await data.fetch_available_series(timeframe=timeframe)
+        return await data.fetch_available_series(timeframe="5m")
     except Exception as e:
         print(f"Error fetching available series: {e}")
         return [
-            {"series_id": "10192", "title": "[15M] BTC Up or Down 15m", "slug": "btc-up-or-down-15m", "timeframe": "15m", "candle_window_minutes": 15},
-            {"series_id": "10212", "title": "[15M] ETH Up or Down 15m", "slug": "eth-up-or-down-15m", "timeframe": "15m", "candle_window_minutes": 15},
             {"series_id": "10684", "title": "[5M] BTC Up or Down 5m", "slug": "btc-up-or-down-5m", "timeframe": "5m", "candle_window_minutes": 5},
             {"series_id": "10683", "title": "[5M] ETH Up or Down 5m", "slug": "eth-up-or-down-5m", "timeframe": "5m", "candle_window_minutes": 5},
         ]
-
-
-@app.post("/api/switch-timeframe")
-async def switch_timeframe(payload: Dict[str, Any]):
-    target_tf = int(payload.get("timeframe", 15))
-    if target_tf not in (5, 15):
-        return {"status": "error", "error": "Invalid timeframe: must be 5 or 15"}
-
-    old_tf = settings.CANDLE_WINDOW_MINUTES
-    settings.CANDLE_WINDOW_MINUTES = target_tf
-
-    series_15m_to_5m = {
-        "10192": "10684",  # BTC
-        "10212": "10683",  # ETH
-        "10191": "10683",  # ETH
-        "10423": "10686",  # SOL
-        "10422": "10685",  # XRP
-        "11330": "11326",  # BNB
-        "11328": "11325",  # DOGE
-        "11329": "11327",  # HYPE
-        "12518": "12517",  # ZEC
-    }
-    series_5m_to_15m = {v: k for k, v in series_15m_to_5m.items()}
-
-    sym = (settings.SYMBOL or "BTCUSDT").upper()
-    asset = sym.replace("USDT", "").replace("USD", "").lower()
-    if target_tf == 5:
-        if settings.POLYMARKET_SERIES_ID in series_15m_to_5m:
-            settings.POLYMARKET_SERIES_ID = series_15m_to_5m[settings.POLYMARKET_SERIES_ID]
-        elif not settings.POLYMARKET_SERIES_ID or settings.POLYMARKET_SERIES_ID == "10192":
-            settings.POLYMARKET_SERIES_ID = "10684"
-        settings.POLYMARKET_SERIES_SLUG = f"{asset}-up-or-down-5m"
-    else:
-        if settings.POLYMARKET_SERIES_ID in series_5m_to_15m:
-            settings.POLYMARKET_SERIES_ID = series_5m_to_15m[settings.POLYMARKET_SERIES_ID]
-        elif not settings.POLYMARKET_SERIES_ID or settings.POLYMARKET_SERIES_ID == "10684":
-            settings.POLYMARKET_SERIES_ID = "10192"
-        settings.POLYMARKET_SERIES_SLUG = f"{asset}-up-or-down-15m"
-
-    state["trade_ctx"] = None
-    state["market_opens"].clear()
-    state["last_window_start"] = None
-    state["ls_ctx"] = None
-    global _cached_market, _cached_market_ts
-    _cached_market = None
-    _cached_market_ts = 0.0
-    _next_market.update(start_ms=None, market=None, tokens=[], series=None)
-    _loop_wake.set()
-
-    cfg_file = CONFIG_PATH if os.path.exists(CONFIG_PATH) else "config.json"
-    try:
-        cfg = {}
-        if os.path.exists(cfg_file):
-            with open(cfg_file, "r") as f:
-                cfg = json.load(f)
-        cfg.setdefault("trading", {})["candle_window_minutes"] = target_tf
-        cfg.setdefault("polymarket", {})["series_id"] = settings.POLYMARKET_SERIES_ID
-        if settings.POLYMARKET_SERIES_SLUG:
-            cfg.setdefault("polymarket", {})["series_slug"] = settings.POLYMARKET_SERIES_SLUG
-        with open(cfg_file, "w") as f:
-            json.dump(cfg, f, indent=2)
-    except Exception as e:
-        print(f"Error persisting timeframe switch to config.json: {e}")
-
-    log_message(f"Market timeframe switched to {target_tf}m (Polymarket Series ID: {settings.POLYMARKET_SERIES_ID}).")
-    _reflect_running_now()
-    if "trading_state" in state.get("latest_data", {}):
-        state["latest_data"]["trading_state"]["candle_window_minutes"] = target_tf
-    await broadcast_state()
-    return {"status": "ok", "candle_window_minutes": target_tf, "series_id": settings.POLYMARKET_SERIES_ID}
 
 
 @app.get("/api/telegram-subscribers")

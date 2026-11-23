@@ -196,27 +196,19 @@ def summarize_order_book(book: Dict, depth_levels: int = 5) -> Dict:
     }
 
 async def fetch_available_series(timeframe: Optional[str] = None) -> List[Dict]:
-    """Fetch available Up or Down series for both 15m and 5m market strategies."""
+    """Fetch available 5m Up or Down market series."""
     url = f"{settings.GAMMA_BASE_URL}/events"
     proxy = get_proxy_url_for(url)
     client = get_client(proxy)
 
     series_map = {
-        "10192": {"series_id": "10192", "title": "[15M] BTC Up or Down 15m", "slug": "btc-up-or-down-15m", "timeframe": "15m", "candle_window_minutes": 15},
-        "10212": {"series_id": "10212", "title": "[15M] ETH Up or Down 15m", "slug": "eth-up-or-down-15m", "timeframe": "15m", "candle_window_minutes": 15},
-        "10423": {"series_id": "10423", "title": "[15M] SOL Up or Down 15m", "slug": "sol-up-or-down-15m", "timeframe": "15m", "candle_window_minutes": 15},
-        "10422": {"series_id": "10422", "title": "[15M] XRP Up or Down 15m", "slug": "xrp-up-or-down-15m", "timeframe": "15m", "candle_window_minutes": 15},
         "10684": {"series_id": "10684", "title": "[5M] BTC Up or Down 5m", "slug": "btc-up-or-down-5m", "timeframe": "5m", "candle_window_minutes": 5},
         "10683": {"series_id": "10683", "title": "[5M] ETH Up or Down 5m", "slug": "eth-up-or-down-5m", "timeframe": "5m", "candle_window_minutes": 5},
         "10686": {"series_id": "10686", "title": "[5M] SOL Up or Down 5m", "slug": "sol-up-or-down-5m", "timeframe": "5m", "candle_window_minutes": 5},
         "10685": {"series_id": "10685", "title": "[5M] XRP Up or Down 5m", "slug": "xrp-up-or-down-5m", "timeframe": "5m", "candle_window_minutes": 5},
     }
 
-    tags_to_check = [("102467", "15m", 15), ("102892", "5m", 5)]
-    if timeframe == "15m":
-        tags_to_check = [("102467", "15m", 15)]
-    elif timeframe == "5m":
-        tags_to_check = [("102892", "5m", 5)]
+    tags_to_check = [("102892", "5m", 5)]
 
     for tag_id, tf, mins in tags_to_check:
         try:
@@ -244,9 +236,7 @@ async def fetch_available_series(timeframe: Optional[str] = None) -> List[Dict]:
             pass
 
     items = list(series_map.values())
-    if timeframe:
-        items = [s for s in items if s.get("timeframe") == timeframe]
-    return sorted(items, key=lambda x: (0 if x["timeframe"] == "15m" else 1, x["title"]))
+    return sorted(items, key=lambda x: x["title"])
 
 async def fetch_available_15m_series() -> List[Dict]:
     return await fetch_available_series()
